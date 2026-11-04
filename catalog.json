@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
+  "updated_at": "2026-11-04T00:00:00Z",
+  "items": [
+    {
+      "id": "gigachat",
+      "name": "GigaChat",
+      "display_name": "GigaChat",
+      "description": "Native GigaChat adapter for the Sber GigaChat API.",
+      "version": "1.0.0",
+      "transport": "native",
+      "features": {
+        "model_discovery": true,
+        "native_streaming": true,
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": false
+      },
+      "permissions": {
+        "network": "connection_endpoint",
+        "secrets": ["connection.api_key"]
+      },
+      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/v1.0.0/gigachat-1.0.0.zip",
+      "checksum_sha256": null,
+      "author": "peldrunai",
+      "author_url": "https://github.com/peldrunai",
+      "homepage": "https://github.com/peldrunai/peldrun-provider-gigachat",
+      "tags": ["gigachat", "sber", "cloud"]
+    }
+  ]
+}

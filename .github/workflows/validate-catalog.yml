@@ -1,0 +1,159 @@
+# .github/workflows/validate-catalog.yml
+name: Validate Catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "catalog.json"
+      - "schema/**"
+      - "scripts/**"
+      - ".github/workflows/validate-catalog.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "catalog.json"
+      - "schema/**"
+      - "scripts/**"
+      - ".github/workflows/validate-catalog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-catalog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate catalog.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema==4.23.0
+
+      - name: Verify required files exist
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in catalog.json schema/catalog.schema.json scripts/validate.py; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::Required file is missing"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Run structural validator
+        run: python scripts/validate.py
+
+      - name: Run JSON Schema validation
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from jsonschema import Draft7Validator
+
+          catalog_path = Path("catalog.json")
+          schema_path = Path("schema/catalog.schema.json")
+
+          try:
+              catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              print(f"::error file={catalog_path}::Failed to parse: {exc}")
+              sys.exit(1)
+
+          try:
+              schema = json.loads(schema_path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              print(f"::error file={schema_path}::Failed to parse: {exc}")
+              sys.exit(1)
+
+          validator = Draft7Validator(schema)
+          errors = sorted(validator.iter_errors(catalog), key=lambda e: list(e.path))
+
+          if not errors:
+              print("Schema validation passed.")
+              sys.exit(0)
+
+          for err in errors:
+              location = ".".join(str(p) for p in err.absolute_path) or "<root>"
+              print(
+                  f"::error file={catalog_path}::"
+                  f"{location}: {err.message}"
+              )
+          sys.exit(1)
+          PY
+
+      - name: Check for trailing whitespace
+        run: |
+          set -euo pipefail
+          if grep -nP '[ \t]+$' catalog.json schema/catalog.schema.json; then
+            echo "::error::Trailing whitespace detected in JSON files"
+            exit 1
+          fi
+
+      - name: Check for CRLF line endings
+        run: |
+          set -euo pipefail
+          if grep -lU $'\r' catalog.json schema/catalog.schema.json 2>/dev/null; then
+            echo "::error::CRLF line endings detected. Use LF only."
+            exit 1
+          fi
+
+      - name: Ensure file ends with newline
+        run: |
+          set -euo pipefail
+          for f in catalog.json schema/catalog.schema.json; do
+            if [ -s "$f" ] && [ "$(tail -c 1 "$f" | xxd -p)" != "0a" ]; then
+              echo "::error file=$f::File does not end with a newline"
+              exit 1
+            fi
+          done
+
+      - name: Assert items is an array
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path("catalog.json").read_text(encoding="utf-8"))
+          items = data.get("items")
+          if not isinstance(items, list):
+              print("::error file=catalog.json::'items' must be a JSON array")
+              sys.exit(1)
+          print(f"items is a valid array with {len(items)} element(s).")
+          PY
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## Catalog validation passed"
+            echo ""
+            echo "- Structural checks: **OK**"
+            echo "- JSON Schema checks: **OK**"
+            echo "- Formatting checks:  **OK**"
+            echo ""
+            echo "Commit: \`${GITHUB_SHA::7}\`"
+            echo "Ref:    \`${GITHUB_REF}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

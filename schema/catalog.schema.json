@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/peldrunai/peldrun-provider-catalog/main/schema/catalog.schema.json",
+  "title": "PELDRUN Provider Catalog",
+  "description": "JSON Schema for the remote catalog consumed by PELDRUN via PELDRUN_PROVIDER_CATALOG_URL.",
+  "type": "object",
+  "required": ["schema_version", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Catalog format version. Currently only 1 is supported."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the catalog's purpose."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the last catalog update."
+    },
+    "items": {
+      "type": "array",
+      "description": "List of installable Provider Packages.",
+      "items": { "$ref": "#/definitions/catalogItem" }
+    }
+  },
+  "definitions": {
+    "catalogItem": {
+      "type": "object",
+      "required": ["id", "name", "version", "transport"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "description": "Unique, filesystem-safe, URL-safe identifier. Must match the provider package's manifest id."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Technical name of the provider."
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-friendly name shown in the UI."
+        },
+        "description": {
+          "type": "string",
+          "description": "One-line summary shown on the catalog card."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "description": "Semantic version of the provider package (must match the ZIP's manifest)."
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["native", "compatible", "custom"],
+          "description": "Adapter transport type declared in the manifest."
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" },
+          "description": "Feature flags advertised by the package (vision, tool_calling, reasoning, ...)."
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Permission declaration mirrored from the manifest. Used to render warnings in the install dialog."
+        },
+        "download_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "pattern": "^https://",
+          "description": "HTTPS URL of the ZIP archive. Required for installability."
+        },
+        "checksum_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Lowercase hex SHA-256 of the ZIP at download_url. Required for installability."
+        },
+        "author": {
+          "type": ["string", "null"]
+        },
+        "author_url": {
+          "type": ["string", "null"],
+          "format": "uri"
+        },
+        "homepage": {
+          "type": ["string", "null"],
+          "format": "uri"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Free-form tags used for filtering in the store UI."
+        },
+        "connection_fields": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Optional snapshot of the manifest's connection_fields. Renders the Configure form for preview-only items."
+        },
+        "certificates": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Optional snapshot of the manifest's certificates. Alerts the user to TLS setup cost before installing."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "download_url": { "type": "string" } },
+            "required": ["download_url"]
+          },
+          "then": { "required": ["checksum_sha256"] }
+        }
+      ]
+    }
+  }
+}
