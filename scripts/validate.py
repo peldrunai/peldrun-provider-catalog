@@ -189,6 +189,17 @@ class CatalogValidator:
             self._err(f"Could not read catalog.json: {exc}")
             return False
 
+        if raw and not raw.endswith("\n"):
+            self._err(
+                "catalog.json does not end with a newline. Add a "
+                "trailing LF (the CI rejects files without one)."
+            )
+        if "\r" in raw:
+            self._err(
+                "catalog.json contains CRLF line endings. Use LF only "
+                "(the CI rejects CRLF)."
+            )
+
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
