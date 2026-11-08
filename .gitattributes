@@ -1,0 +1,22 @@
+# .gitattributes
+#
+# Force LF line endings for all text files in the repository,
+# regardless of the developer's OS or core.autocrlf setting.
+# This keeps the CI (Linux) and local Windows checkouts byte-identical
+# and prevents "CRLF line endings detected" failures on catalog.json
+# and schema/catalog.schema.json.
+
+* text=auto eol=lf
+
+# Explicit overrides for files the CI validates byte-for-byte.
+*.json   text eol=lf
+*.py     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.md     text eol=lf
+
+# Binary files - never touch.
+*.zip    binary
+*.png    binary
+*.jpg    binary
+*.ico    binary
