@@ -1,6 +1,6 @@
 # PELDRUN Provider Catalog
 
-> The official machine-readable catalog of Provider Packages for [PELDRUN](https://github.com/peldrunai/peldrun).
+> The official machine-readable catalog of Provider Packages for [PELDRUN](https://github.com/peldrun/peldrun).
 
 This repository hosts a single JSON file — `catalog.json` — that PELDRUN instances can fetch over HTTPS to discover installable Provider Packages. It is the remote companion to the built-in catalog shipped inside every PELDRUN backend (`backend/omweb/provider_packages/builtin_catalog.json`).
 
