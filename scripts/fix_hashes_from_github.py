@@ -5,6 +5,9 @@ Verify and fix checksum_sha256 values in catalog.json.
 
 For each item with a download_url, downloads the file, computes its
 SHA-256, and writes the correct hash back to catalog.json if it differs.
+The file is also rewritten when it does not end with a trailing LF, so
+a plain `python scripts/fix_hashes_from_github.py` keeps the catalog in
+a state that the CI accepts.
 
 Proxy support: urllib honours HTTPS_PROXY / HTTP_PROXY environment
 variables automatically. Set them before running if github.com is
@@ -80,7 +83,8 @@ def main() -> int:
         return 2
 
     try:
-        catalog = json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+        original_text = CATALOG_FILE.read_text(encoding="utf-8")
+        catalog = json.loads(original_text)
     except json.JSONDecodeError as exc:
         print(f"Error: invalid JSON in {CATALOG_FILE}: {exc}", file=sys.stderr)
         return 2
@@ -123,12 +127,23 @@ def main() -> int:
             print(f"    new: {actual}")
 
     print()
-    if updated:
+
+    # Rewrite the file when either the checksums changed or the file
+    # itself does not end with a newline (the CI enforces a trailing
+    # LF). newline="\n" forces LF output on Windows too, so the file
+    # never picks up CRLF line endings - the CI rejects those as well.
+    needs_rewrite = updated > 0 or not original_text.endswith("\n")
+
+    if needs_rewrite:
         CATALOG_FILE.write_text(
             json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="\n",
         )
-        print(f"Updated {updated} checksum(s) in {CATALOG_FILE}")
+        if updated:
+            print(f"Updated {updated} checksum(s) in {CATALOG_FILE}")
+        else:
+            print(f"Normalized {CATALOG_FILE} (added trailing newline)")
     else:
         print("No changes needed.")
 
