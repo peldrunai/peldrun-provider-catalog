@@ -150,7 +150,11 @@ jobs:
           # `od` is POSIX; `xxd` is not guaranteed on every runner.
           for f in catalog.json schema/catalog.schema.json; do
             if [ -s "$f" ]; then
-              last_byte=$(tail -c 1 "$f" | od -An -tx1 | tr -d ' \n')
+              # od -An -tx1 emits the byte as " 0a" followed by a
+              # newline. `tr -d ' \n'` does NOT strip the newline
+              # (tr does not interpret escape sequences). Use
+              # [:space:] which correctly trims all whitespace.
+              last_byte=$(tail -c 1 "$f" | od -An -tx1 | tr -d '[:space:]')
               if [ "$last_byte" != "0a" ]; then
                 echo "::error file=$f::File does not end with a newline"
                 exit 1
