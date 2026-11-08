@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
-  "updated_at": "2026-11-08T15:18:00+00:00",
+  "updated_at": "2026-11-08T16:39:29+00:00",
   "items": [
     {
       "id": "gigachat",
@@ -50,7 +50,7 @@
       "name": "Cloudflare Workers AI",
       "display_name": "Cloudflare AI",
       "description": "Cloudflare Workers AI provides serverless GPU inference for 50+ open-source models (Llama, Mistral, Qwen, DeepSeek, Kimi, Gemma) on Cloudflare's global network. Billed per neuron; free tier includes 10,000 neurons/day.",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "transport": "native",
       "features": {
         "model_discovery": true,
@@ -76,8 +76,8 @@
       "brand_color": "#F38020",
       "icon": "cloudflare",
       "icon_type": "name",
-      "download_url": "https://github.com/peldrunai/peldrun-provider-cloudflare-ai/releases/download/v1.0.4/cloudflare-ai-1.0.4.zip",
-      "checksum_sha256": "426ac1a36b8c9a93d5ad860286617b6bd34788ca8028c49cadaece51e42994b1",
+      "download_url": "https://github.com/peldrunai/peldrun-provider-cloudflare-ai/releases/download/v1.0.5/cloudflare-ai-1.0.5.zip",
+      "checksum_sha256": "b60dafba8c2a77992d8c23aa8dcc9335f4351e466908a4b8083eb5f84bfa85aa",
       "author": "PELDRUN Community",
       "author_url": "https://github.com/peldrun/peldrun-providers",
       "homepage": "https://developers.cloudflare.com/workers-ai/",
