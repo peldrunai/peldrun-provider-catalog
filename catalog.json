@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
-  "updated_at": "2026-11-04T14:30:00Z",
+  "updated_at": "2026-11-08T13:04:08+00:00",
   "items": [
     {
       "id": "gigachat",
@@ -19,7 +19,9 @@
       },
       "permissions": {
         "network": "connection_endpoint",
-        "secrets": ["connection.api_key"]
+        "secrets": [
+          "connection.api_key"
+        ]
       },
       "brand_color": "#21A038",
       "icon": "gigachat",
@@ -37,7 +39,93 @@
       },
       "repository_url": "https://github.com/peldrunai/peldrun-provider-gigachat",
       "license": "MIT",
-      "tags": ["gigachat", "sber", "cloud"]
+      "tags": [
+        "gigachat",
+        "sber",
+        "cloud"
+      ]
+    },
+    {
+      "id": "cloudflare-ai",
+      "name": "Cloudflare Workers AI",
+      "display_name": "Cloudflare AI",
+      "description": "Cloudflare Workers AI provides serverless GPU inference for 50+ open-source models (Llama, Mistral, Qwen, DeepSeek, Kimi, Gemma) on Cloudflare's global network. Billed per neuron; free tier includes 10,000 neurons/day.",
+      "version": "1.0.2",
+      "transport": "native",
+      "features": {
+        "model_discovery": true,
+        "native_streaming": true,
+        "buffered_streaming": true,
+        "tool_calling": true,
+        "parallel_tool_calls": false,
+        "forced_tool_choice": false,
+        "vision": true,
+        "audio": false,
+        "structured_output": true,
+        "usage_reporting": true,
+        "reasoning": true
+      },
+      "permissions": {
+        "network": "connection_endpoint",
+        "secrets": [
+          "connection.api_key"
+        ],
+        "workspace_access": false,
+        "shell_execute": false
+      },
+      "brand_color": "#F38020",
+      "icon": "cloudflare",
+      "icon_type": "name",
+      "download_url": "https://github.com/peldrunai/peldrun-provider-cloudflare-ai/releases/download/v1.0.2/cloudflare-ai-1.0.2.zip",
+      "checksum_sha256": "ba8512b2e4f25e8ace851f34c1fd11d9a50872b6bb26ec424d1fa7ca2cb70033",
+      "author": "PELDRUN Community",
+      "author_url": "https://github.com/peldrun/peldrun-providers",
+      "homepage": "https://developers.cloudflare.com/workers-ai/",
+      "developer": {
+        "name": "PELDRUN Community",
+        "verified": false,
+        "url": "https://github.com/peldrun/peldrun-providers",
+        "github_username": "peldrun"
+      },
+      "repository_url": "https://github.com/peldrunai/peldrun-provider-cloudflare-ai",
+      "license": "MIT",
+      "tags": [
+        "cloudflare",
+        "workers-ai",
+        "serverless",
+        "llama",
+        "mistral",
+        "qwen",
+        "deepseek",
+        "kimi",
+        "gemma"
+      ],
+      "docs_url": "https://developers.cloudflare.com/workers-ai/",
+      "connection_fields": [
+        {
+          "key": "account_id",
+          "label": "Cloudflare Account ID",
+          "type": "string",
+          "required": true,
+          "placeholder": "023e105f4ecef8ad9ca31a8372d0c353",
+          "pattern": "^[a-f0-9]{32}$",
+          "description": "Find it via `wrangler whoami` or in the Cloudflare dashboard URL (dash.cloudflare.com/<account_id>/...)."
+        },
+        {
+          "key": "api_key",
+          "label": "API Token",
+          "type": "password",
+          "required": true,
+          "description": "Create a token with the 'Workers AI Read' permission at dash.cloudflare.com/profile/api-tokens. Sent as Authorization: Bearer."
+        },
+        {
+          "key": "base_url",
+          "label": "Endpoint URL (auto-computed)",
+          "type": "url",
+          "required": false,
+          "description": "Leave empty. The adapter builds the endpoint from your Account ID automatically. Only override for advanced proxy setups."
+        }
+      ]
     }
   ]
 }
