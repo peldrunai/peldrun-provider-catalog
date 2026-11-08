@@ -39,18 +39,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
-      - name: Install validation dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install jsonschema==4.23.0
-
+      # Fail fast if the repository layout is broken. This step has no
+      # continue-on-error: a missing file is an infrastructure problem,
+      # not a catalog-content problem, so we abort before running any
+      # check that would just cascade-fail.
       - name: Verify required files exist
         run: |
           set -euo pipefail
           missing=0
-          for f in catalog.json schema/catalog.schema.json scripts/validate.py; do
+          for f in catalog.json schema/catalog.schema.json scripts/validate.py scripts/fix_hashes_from_github.py; do
             if [ ! -f "$f" ]; then
               echo "::error file=$f::Required file is missing"
               missing=1
@@ -60,17 +58,33 @@ jobs:
             exit 1
           fi
 
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema==4.23.0
+
+      # The following content checks are independent and must ALL run
+      # even when one of them fails, so the contributor sees every
+      # problem in a single CI run (matching the "collect all errors in
+      # one pass" contract documented in scripts/validate.py). Each one
+      # records its outcome via `continue-on-error: true` + `id`, and
+      # the final "Aggregate" step fails the job if any of them failed.
+
       - name: Run structural validator
+        id: structural
+        continue-on-error: true
         run: python scripts/validate.py
 
       - name: Run JSON Schema validation
+        id: schema
+        continue-on-error: true
         run: |
           python - <<'PY'
           import json
           import sys
           from pathlib import Path
 
-          from jsonschema import Draft7Validator
+          from jsonschema import Draft7Validator, FormatChecker
 
           catalog_path = Path("catalog.json")
           schema_path = Path("schema/catalog.schema.json")
@@ -87,8 +101,13 @@ jobs:
               print(f"::error file={schema_path}::Failed to parse: {exc}")
               sys.exit(1)
 
-          validator = Draft7Validator(schema)
-          errors = sorted(validator.iter_errors(catalog), key=lambda e: list(e.path))
+          # FormatChecker is required - without it jsonschema silently
+          # ignores every "format" keyword (uri, date-time, ...).
+          validator = Draft7Validator(schema, format_checker=FormatChecker())
+          errors = sorted(
+              validator.iter_errors(catalog),
+              key=lambda e: [str(p) for p in e.path],
+          )
 
           if not errors:
               print("Schema validation passed.")
@@ -104,6 +123,8 @@ jobs:
           PY
 
       - name: Check for trailing whitespace
+        id: whitespace
+        continue-on-error: true
         run: |
           set -euo pipefail
           if grep -nP '[ \t]+$' catalog.json schema/catalog.schema.json; then
@@ -112,37 +133,79 @@ jobs:
           fi
 
       - name: Check for CRLF line endings
+        id: crlf
+        continue-on-error: true
         run: |
           set -euo pipefail
-          if grep -lU $'\r' catalog.json schema/catalog.schema.json 2>/dev/null; then
+          if grep -q $'\r' catalog.json schema/catalog.schema.json 2>/dev/null; then
             echo "::error::CRLF line endings detected. Use LF only."
             exit 1
           fi
 
       - name: Ensure file ends with newline
+        id: newline
+        continue-on-error: true
         run: |
           set -euo pipefail
+          # `od` is POSIX; `xxd` is not guaranteed on every runner.
           for f in catalog.json schema/catalog.schema.json; do
-            if [ -s "$f" ] && [ "$(tail -c 1 "$f" | xxd -p)" != "0a" ]; then
-              echo "::error file=$f::File does not end with a newline"
-              exit 1
+            if [ -s "$f" ]; then
+              last_byte=$(tail -c 1 "$f" | od -An -tx1 | tr -d ' \n')
+              if [ "$last_byte" != "0a" ]; then
+                echo "::error file=$f::File does not end with a newline"
+                exit 1
+              fi
             fi
           done
 
-      - name: Assert items is an array
+      # Optional network-based integrity check.
+      # Runs ONLY on manual dispatch (workflow_dispatch) so that:
+      #   - ordinary PRs stay fast and never depend on github.com being up;
+      #   - the contents of the packages change far more often than
+      #     catalog.json itself, so a mismatch discovered here means
+      #     "the release was re-published under the same URL" and should
+      #     be fixed deliberately by a maintainer, not on every push.
+      # A non-zero exit from fix_hashes_from_github.py (--check) means
+      # at least one catalog item's checksum_sha256 does not match the
+      # bytes actually served at its download_url, or a package could
+      # not be fetched.
+      - name: Verify checksums against remote packages
+        id: checksums
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          python - <<'PY'
-          import json
-          import sys
-          from pathlib import Path
+          python scripts/fix_hashes_from_github.py \
+            --check \
+            --strict-zip \
+            --timeout 30 \
+            --retries 2
 
-          data = json.loads(Path("catalog.json").read_text(encoding="utf-8"))
-          items = data.get("items")
-          if not isinstance(items, list):
-              print("::error file=catalog.json::'items' must be a JSON array")
-              sys.exit(1)
-          print(f"items is a valid array with {len(items)} element(s).")
-          PY
+      # Single source of truth for the job's pass/fail decision: the
+      # check steps above intentionally never fail the workflow on their
+      # own (continue-on-error: true) so we can report all problems at
+      # once. This step turns their recorded outcomes into the final
+      # exit code.
+      - name: Aggregate validation results
+        env:
+          OUTCOME_STRUCTURAL: ${{ steps.structural.outcome }}
+          OUTCOME_SCHEMA: ${{ steps.schema.outcome }}
+          OUTCOME_WHITESPACE: ${{ steps.whitespace.outcome }}
+          OUTCOME_CRLF: ${{ steps.crlf.outcome }}
+          OUTCOME_NEWLINE: ${{ steps.newline.outcome }}
+          OUTCOME_CHECKSUMS: ${{ steps.checksums.outcome }}
+        run: |
+          set -uo pipefail
+          failed=0
+          for name in STRUCTURAL SCHEMA WHITESPACE CRLF NEWLINE CHECKSUMS; do
+            var="OUTCOME_${name}"
+            outcome="${!var}"
+            if [ "$outcome" = "failure" ]; then
+              echo "::error::Validation check '${name}' failed. See the step log above."
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Summary
         if: success()

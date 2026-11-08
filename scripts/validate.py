@@ -4,9 +4,10 @@
 Local validation for catalog.json.
 
 This script mirrors the checks performed by the CI workflow
-(.github/workflows/validate-catalog.yml) so contributors can catch
-problems BEFORE pushing. It has no third-party dependencies — only
-the Python standard library — so it can be run on any machine with
+(.github/workflows/validate-catalog.yml) and the JSON Schema at
+schema/catalog.schema.json, so contributors can catch problems
+BEFORE pushing. It has no third-party dependencies - only the
+Python standard library - so it can be run on any machine with
 Python 3.10+.
 
 Checks
@@ -14,18 +15,27 @@ Checks
     1. catalog.json exists and parses as JSON.
     2. schema_version is a supported integer (currently only 1).
     3. Every item in "items" is a JSON object.
-    4. Every item passes the field-level rules enforced by PELDRUN's
+    4. Every item contains only known fields (mirrors
+       `additionalProperties: false` in the JSON Schema) and every
+       known field is type-checked against its documented contract.
+    5. Every item passes the field-level rules enforced by PELDRUN's
        runtime (backend/omweb/provider_packages/catalog.py and
-       schema.py):
+       schema.py) and by schema/catalog.schema.json:
          - id matches ^[a-z0-9][a-z0-9._-]*$
+         - name is a non-empty string
          - version matches semver
          - transport in {native, compatible, custom}
          - download_url, when set, is https://
          - checksum_sha256, when set, is a 64-char lowercase hex digest
          - download_url and checksum_sha256 are both set, or both null
-           (a ZIP URL without a checksum is rejected — supply-chain
+           (a ZIP URL without a checksum is rejected - supply-chain
            integrity is non-negotiable)
-    5. No duplicate "id" values.
+         - URL-shaped fields (homepage, author_url, developer.url)
+           are syntactically valid URIs
+         - developer, permissions, features are well-formed objects
+         - brand_color, icon_type, license match their documented
+           formats when present
+    6. No duplicate "id" values.
 
 Exit code
 ---------
@@ -37,6 +47,7 @@ Exit code
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -44,7 +55,8 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# Constants — must match backend/omweb/provider_packages/schema.py
+# Constants - must match backend/omweb/provider_packages/schema.py and
+# schema/catalog.schema.json
 # ---------------------------------------------------------------------------
 
 #: Root of the repository (this script lives in scripts/).
@@ -58,18 +70,70 @@ VERSION_PATTERN = re.compile(
     r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+BRAND_COLOR_PATTERN = re.compile(
+    r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+)
+#: Pragmatic RFC 3986 scheme check. Catches obvious junk like "not a url"
+#: while staying close to jsonschema's FormatChecker("uri") behaviour.
+URI_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:\S+$")
 ALLOWED_TRANSPORTS = {"native", "compatible", "custom"}
+ALLOWED_ICON_TYPES = {"name", "url"}
+
+#: Fields accepted at the top level of catalog.json.
+#: Must mirror the root `properties` map in schema/catalog.schema.json.
+ALLOWED_TOP_LEVEL_FIELDS: frozenset[str] = frozenset({
+    "schema_version",
+    "description",
+    "updated_at",
+    "items",
+})
+
+#: Fields accepted on a catalog item.
+#: Must mirror the `properties` map of `catalogItem` in
+#: schema/catalog.schema.json - any field listed there must be listed
+#: here, and vice versa, or the local and CI checks diverge.
+ALLOWED_ITEM_FIELDS: frozenset[str] = frozenset({
+    "id",
+    "name",
+    "display_name",
+    "description",
+    "version",
+    "transport",
+    "features",
+    "permissions",
+    "brand_color",
+    "icon",
+    "icon_type",
+    "download_url",
+    "checksum_sha256",
+    "author",
+    "author_url",
+    "developer",
+    "repository_url",
+    "homepage",
+    "license",
+    "tags",
+    "connection_fields",
+    "certificates",
+})
+
+#: Fields accepted inside the nested `developer` object.
+ALLOWED_DEVELOPER_FIELDS: frozenset[str] = frozenset({
+    "name",
+    "url",
+    "github_username",
+    "verified",
+})
 
 
 # ---------------------------------------------------------------------------
-# ANSI colours — degrade gracefully on terminals that do not support them
+# ANSI colours - degrade gracefully on terminals that do not support them
 # ---------------------------------------------------------------------------
 
 def _supports_colour() -> bool:
-    return sys.stdout.isatty() and sys.platform != "win32" or (
-        sys.platform == "win32"
-        and "ANSICON" in __import__("os").environ
-    )
+    if sys.platform == "win32":
+        return sys.stdout.isatty() and "ANSICON" in os.environ
+    return sys.stdout.isatty()
 
 
 _RED = "\033[31m" if _supports_colour() else ""
@@ -110,9 +174,10 @@ class CatalogValidator:
         """
         Load and validate catalog.json.
 
-        Returns True when the file loads and every structural check
-        passes. The individual item checks are still recorded on
-        ``self.errors`` — the caller decides how to report them.
+        Returns True only when the file loads, the top-level structure
+        is valid, and every individual item check has also passed.
+        Every problem - top-level or per-item - is recorded on
+        ``self.errors`` so the caller can report them all at once.
         """
         if not CATALOG_PATH.is_file():
             self._err(f"catalog.json not found at {CATALOG_PATH}")
@@ -144,7 +209,16 @@ class CatalogValidator:
         return not self.errors
 
     def _validate_top_level(self, payload: dict[str, Any]) -> None:
-        # schema_version
+        # --- unknown top-level fields (mirrors additionalProperties:false)
+        unknown = set(payload) - ALLOWED_TOP_LEVEL_FIELDS
+        if unknown:
+            self._err(
+                f"catalog.json contains unknown top-level field(s) "
+                f"{sorted(unknown)}. Allowed: "
+                f"{sorted(ALLOWED_TOP_LEVEL_FIELDS)}"
+            )
+
+        # --- schema_version -----------------------------------------
         version = payload.get("schema_version")
         if version is None:
             self._err("catalog.json is missing required field 'schema_version'")
@@ -159,7 +233,23 @@ class CatalogValidator:
                 f"Supported: {sorted(SUPPORTED_SCHEMA_VERSIONS)}"
             )
 
-        # items
+        # --- description (optional) ---------------------------------
+        description = payload.get("description")
+        if description is not None and not isinstance(description, str):
+            self._err(
+                f"'description' must be a string, "
+                f"got {type(description).__name__}"
+            )
+
+        # --- updated_at (optional) ----------------------------------
+        updated_at = payload.get("updated_at")
+        if updated_at is not None and not isinstance(updated_at, str):
+            self._err(
+                f"'updated_at' must be a string, "
+                f"got {type(updated_at).__name__}"
+            )
+
+        # --- items ---------------------------------------------------
         items = payload.get("items")
         if items is None:
             self._err("catalog.json is missing required field 'items'")
@@ -199,6 +289,14 @@ class CatalogValidator:
             self._err(f"{label} must be a JSON object, got {type(item).__name__}")
             return
 
+        # --- unknown fields (mirrors additionalProperties: false) ----
+        unknown = set(item) - ALLOWED_ITEM_FIELDS
+        if unknown:
+            self._err(
+                f"{label}: unknown field(s) {sorted(unknown)}. "
+                f"Allowed fields: {sorted(ALLOWED_ITEM_FIELDS)}"
+            )
+
         # --- id ------------------------------------------------------
         raw_id = item.get("id")
         if not isinstance(raw_id, str) or not raw_id:
@@ -216,8 +314,15 @@ class CatalogValidator:
                 seen_ids.add(raw_id)
 
         # --- name ----------------------------------------------------
-        if not isinstance(item.get("name"), str) or not item.get("name"):
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
             self._err(f"{label}.name must be a non-empty string")
+
+        # --- display_name (optional) --------------------------------
+        self._validate_optional_string(item, "display_name", label)
+
+        # --- description (optional) ---------------------------------
+        self._validate_optional_string(item, "description", label)
 
         # --- version -------------------------------------------------
         version = item.get("version")
@@ -245,7 +350,7 @@ class CatalogValidator:
                     f"{label}.download_url must be a non-empty string "
                     f"or null"
                 )
-            elif not download_url.lower().startswith("https://"):
+            elif not download_url.startswith("https://"):
                 self._err(
                     f"{label}.download_url must use https://, "
                     f"got {download_url!r}"
@@ -273,7 +378,7 @@ class CatalogValidator:
             self._err(
                 f"{label}: download_url is set but checksum_sha256 "
                 f"is missing. PELDRUN refuses to install a package "
-                f"without a published SHA-256 — this is a "
+                f"without a published SHA-256 - this is a "
                 f"supply-chain integrity requirement."
             )
         elif has_hash and not has_url:
@@ -284,21 +389,77 @@ class CatalogValidator:
                 f"item."
             )
 
-        # --- author / homepage (warnings only) -----------------------
-        author = item.get("author")
-        if author is not None and not isinstance(author, str):
-            self._err(f"{label}.author must be a string or null")
+        # --- author / author_url / homepage -------------------------
+        self._validate_optional_string(item, "author", label)
+        self._validate_optional_uri(item, "author_url", label)
+        self._validate_optional_uri(item, "homepage", label)
 
-        homepage = item.get("homepage")
-        if homepage is not None and not (
-            isinstance(homepage, str) and homepage.startswith(("https://", "http://"))
-        ):
-            self._warn(
-                f"{label}.homepage should be an http(s) URL, "
-                f"got {homepage!r}"
+        # --- developer (optional nested object) ---------------------
+        self._validate_developer(item.get("developer"), label)
+
+        # --- repository_url (optional, https:// only) --------------
+        repository_url = item.get("repository_url")
+        if repository_url is not None:
+            if not isinstance(repository_url, str) or not repository_url:
+                self._err(
+                    f"{label}.repository_url must be a non-empty "
+                    f"string or null"
+                )
+            elif not repository_url.startswith("https://"):
+                self._err(
+                    f"{label}.repository_url must use https://, "
+                    f"got {repository_url!r}"
+                )
+
+        # --- license (optional non-empty string) -------------------
+        license_id = item.get("license")
+        if license_id is not None:
+            if not isinstance(license_id, str) or not license_id:
+                self._err(
+                    f"{label}.license must be a non-empty string or null"
+                )
+
+        # --- brand_color (optional hex) ----------------------------
+        brand_color = item.get("brand_color")
+        if brand_color is not None:
+            if (
+                not isinstance(brand_color, str)
+                or not BRAND_COLOR_PATTERN.match(brand_color)
+            ):
+                self._err(
+                    f"{label}.brand_color must be a hex colour like "
+                    f"'#21A038', got {brand_color!r}"
+                )
+
+        # --- icon / icon_type --------------------------------------
+        icon = item.get("icon")
+        if icon is not None:
+            if not isinstance(icon, str) or not icon:
+                self._err(
+                    f"{label}.icon must be a non-empty string or null"
+                )
+
+        icon_type = item.get("icon_type")
+        if icon_type is not None:
+            if (
+                not isinstance(icon_type, str)
+                or icon_type not in ALLOWED_ICON_TYPES
+            ):
+                self._err(
+                    f"{label}.icon_type must be one of "
+                    f"{sorted(ALLOWED_ICON_TYPES)} or null, "
+                    f"got {icon_type!r}"
+                )
+
+        # --- permissions (optional object) -------------------------
+        permissions = item.get("permissions")
+        if permissions is not None and not isinstance(permissions, dict):
+            self._err(
+                f"{label}.permissions must be a JSON object, "
+                f"got {type(permissions).__name__}"
             )
 
-        # --- features (must be a boolean map) ------------------------
+        # --- features (must be a boolean map) ----------------------
         features = item.get("features")
         if features is not None:
             if not isinstance(features, dict):
@@ -329,6 +490,107 @@ class CatalogValidator:
                             f"{label}.tags[{t_index}] must be a string, "
                             f"got {type(tag).__name__}"
                         )
+
+        # --- connection_fields / certificates ---------------------
+        for field in ("connection_fields", "certificates"):
+            value = item.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                self._err(
+                    f"{label}.{field} must be a JSON array, "
+                    f"got {type(value).__name__}"
+                )
+                continue
+            for element_index, element in enumerate(value):
+                if not isinstance(element, dict):
+                    self._err(
+                        f"{label}.{field}[{element_index}] must be a "
+                        f"JSON object, got {type(element).__name__}"
+                    )
+
+    # ------------------------------------------------------------------
+    # Field helpers
+    # ------------------------------------------------------------------
+
+    def _validate_optional_string(
+        self, item: dict[str, Any], field: str, label: str
+    ) -> None:
+        value = item.get(field)
+        if value is not None and not isinstance(value, str):
+            self._err(
+                f"{label}.{field} must be a string or null, "
+                f"got {type(value).__name__}"
+            )
+
+    def _validate_optional_uri(
+        self, item: dict[str, Any], field: str, label: str
+    ) -> None:
+        value = item.get(field)
+        if value is None:
+            return
+        if not isinstance(value, str):
+            self._err(
+                f"{label}.{field} must be a string or null, "
+                f"got {type(value).__name__}"
+            )
+            return
+        if not URI_PATTERN.match(value):
+            self._err(
+                f"{label}.{field} must be a valid URI "
+                f"(e.g. 'https://example.com'), got {value!r}"
+            )
+        elif not value.lower().startswith(("https://", "http://")):
+            self._warn(
+                f"{label}.{field} uses a non-HTTP scheme; "
+                f"PELDRUN's UI expects an http(s) URL, got {value!r}"
+            )
+
+    def _validate_developer(self, developer: Any, label: str) -> None:
+        if developer is None:
+            return
+        if not isinstance(developer, dict):
+            self._err(
+                f"{label}.developer must be a JSON object or null, "
+                f"got {type(developer).__name__}"
+            )
+            return
+
+        unknown = set(developer) - ALLOWED_DEVELOPER_FIELDS
+        if unknown:
+            self._err(
+                f"{label}.developer contains unknown field(s) "
+                f"{sorted(unknown)}. Allowed: "
+                f"{sorted(ALLOWED_DEVELOPER_FIELDS)}"
+            )
+
+        dev_name = developer.get("name")
+        if dev_name is not None and (
+            not isinstance(dev_name, str) or not dev_name
+        ):
+            self._err(
+                f"{label}.developer.name must be a non-empty string"
+            )
+
+        dev_url = developer.get("url")
+        if dev_url is not None:
+            if not isinstance(dev_url, str):
+                self._err(f"{label}.developer.url must be a string")
+            elif not URI_PATTERN.match(dev_url):
+                self._err(
+                    f"{label}.developer.url must be a valid URI, "
+                    f"got {dev_url!r}"
+                )
+
+        dev_gh = developer.get("github_username")
+        if dev_gh is not None and not isinstance(dev_gh, str):
+            self._err(
+                f"{label}.developer.github_username must be a string"
+            )
+
+        dev_verified = developer.get("verified")
+        if dev_verified is not None and not isinstance(dev_verified, bool):
+            self._err(f"{label}.developer.verified must be a boolean")
 
     # ------------------------------------------------------------------
     # Reporting

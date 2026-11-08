@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/peldrunai/peldrun-provider-catalog/main/schema/catalog.schema.json",
+  "$comment": "Path: schema/catalog.schema.json",
   "title": "PELDRUN Provider Catalog",
   "description": "JSON Schema for the remote catalog consumed by PELDRUN via PELDRUN_PROVIDER_CATALOG_URL.",
   "type": "object",
@@ -71,6 +72,21 @@
           "additionalProperties": true,
           "description": "Permission declaration mirrored from the manifest. Used to render warnings in the install dialog."
         },
+        "brand_color": {
+          "type": ["string", "null"],
+          "pattern": "^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+          "description": "Hex brand colour used by the store UI (e.g. '#21A038')."
+        },
+        "icon": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Icon identifier - either a built-in icon name or an image URL, depending on icon_type."
+        },
+        "icon_type": {
+          "type": ["string", "null"],
+          "enum": ["name", "url", null],
+          "description": "How the 'icon' field should be interpreted: 'name' for a bundled icon, 'url' for a remote image."
+        },
         "download_url": {
           "type": ["string", "null"],
           "format": "uri",
@@ -89,9 +105,45 @@
           "type": ["string", "null"],
           "format": "uri"
         },
+        "developer": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Display name of the developer or publisher."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Public URL for the developer."
+            },
+            "github_username": {
+              "type": "string",
+              "description": "GitHub username used for verification."
+            },
+            "verified": {
+              "type": "boolean",
+              "description": "Whether the publisher has been verified by the catalog maintainers."
+            }
+          },
+          "description": "Developer / publisher identity shown in the install dialog."
+        },
+        "repository_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "pattern": "^https://",
+          "description": "HTTPS URL of the provider's public source repository."
+        },
         "homepage": {
           "type": ["string", "null"],
           "format": "uri"
+        },
+        "license": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "SPDX license identifier (e.g. 'MIT', 'Apache-2.0')."
         },
         "tags": {
           "type": "array",
@@ -112,10 +164,23 @@
       "allOf": [
         {
           "if": {
-            "properties": { "download_url": { "type": "string" } },
+            "properties": { "download_url": { "type": "string", "minLength": 1 } },
             "required": ["download_url"]
           },
-          "then": { "required": ["checksum_sha256"] }
+          "then": {
+            "properties": { "checksum_sha256": { "type": "string", "minLength": 1 } },
+            "required": ["checksum_sha256"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "checksum_sha256": { "type": "string", "minLength": 1 } },
+            "required": ["checksum_sha256"]
+          },
+          "then": {
+            "properties": { "download_url": { "type": "string", "minLength": 1 } },
+            "required": ["download_url"]
+          }
         }
       ]
     }
