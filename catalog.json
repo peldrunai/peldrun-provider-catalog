@@ -1,49 +1,44 @@
 {
   "schema_version": 1,
   "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
-  "updated_at": "2026-11-08T16:39:29+00:00",
+  "updated_at": "2026-11-27T17:57:46+00:00",
   "items": [
     {
       "id": "gigachat",
-      "name": "GigaChat",
-      "display_name": "GigaChat",
-      "description": "Native GigaChat adapter for the Sber GigaChat API.",
-      "version": "1.0.0",
+      "name": "GigaChat (Sber)",
+      "version": "1.0.3",
       "transport": "native",
       "features": {
         "model_discovery": true,
         "native_streaming": true,
+        "buffered_streaming": true,
         "tool_calling": true,
-        "vision": false,
+        "parallel_tool_calls": false,
+        "forced_tool_choice": false,
+        "vision": true,
+        "audio": false,
+        "structured_output": false,
+        "usage_reporting": true,
         "reasoning": false
       },
       "permissions": {
         "network": "connection_endpoint",
         "secrets": [
           "connection.api_key"
-        ]
+        ],
+        "workspace_access": false,
+        "shell_execute": false
       },
-      "brand_color": "#21A038",
+      "brand_color": "#000000",
       "icon": "gigachat",
       "icon_type": "name",
-      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/V1.0.2/gigachat-1.0.2.zip",
-      "checksum_sha256": "55b937d1e8990783913be875b972d8383f684dd1bf193f983e2b4bb468a10ea8",
-      "author": "Beldrun",
-      "author_url": "https://github.com/peldrun/peldrun",
-      "homepage": "https://github.com/peldrun/peldrun",
+      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/1.0.3/gigachat-1.0.3.zip",
+      "checksum_sha256": "PLACEHOLDER_SHA256_FROM_VERIFY_SCRIPT",
       "developer": {
-        "name": "Beldrun",
-        "url": "https://github.com/peldrun/peldrun",
-        "github_username": "peldrun",
-        "verified": true
-      },
-      "repository_url": "https://github.com/peldrunai/peldrun-provider-gigachat",
-      "license": "MIT",
-      "tags": [
-        "gigachat",
-        "sber",
-        "cloud"
-      ]
+        "name": "PELDRUN Community",
+        "url": "https://github.com/peldrun/peldrun-providers",
+        "verified": false
+      }
     },
     {
       "id": "cloudflare-ai",
