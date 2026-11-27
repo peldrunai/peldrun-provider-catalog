@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
-  "updated_at": "2026-11-27T19:05:49+00:00",
+  "updated_at": "2026-11-27T19:18:35+00:00",
   "items": [
     {
       "id": "gigachat",
       "name": "GigaChat (Sber)",
       "display_name": "GigaChat",
-      "version": "1.0.5",
-      "icon": "{{ICON_NAME}}",
+      "version": "1.0.6",
+      "icon": "GigaChat",
       "brand-color": "#1A991A",
       "description": "GigaChat is a family of Russian language models from Sber. Requires OAuth authentication and a custom CA bundle (Russian Trusted Root CA).",
       "api_contract": "peldrun.llm.provider.v1",
@@ -186,9 +186,8 @@
         "workspace_access": false,
         "shell_execute": false
       },
-      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/v1.0.5/{{PROVIDER_ID}}-1.0.5.zip",
-      "checksum_sha256": "03a880d42c8388fd660ea0673eb868929952c1c1e059827c9b18d81308b46f9c",
-      "brand_color": "{{BRAND_COLOR}}",
+      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/v1.0.6/gigachat-1.0.6.zip",
+      "checksum_sha256": "da6cb9e1217fa08751d62b9f696a98934964d0e57d85c5c8a26e365e3c5d7a2c",
       "icon_type": "name"
     },
     {
