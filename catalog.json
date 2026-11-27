@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "description": "Official PELDRUN Provider Package catalog. Fetched remotely by PELDRUN instances via the PELDRUN_PROVIDER_CATALOG_URL environment variable.",
-  "updated_at": "2026-11-27T17:57:46+00:00",
+  "updated_at": "2026-11-27T18:20:27+00:00",
   "items": [
     {
       "id": "gigachat",
       "name": "GigaChat (Sber)",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "transport": "native",
       "features": {
         "model_discovery": true,
@@ -32,7 +32,7 @@
       "brand_color": "#000000",
       "icon": "gigachat",
       "icon_type": "name",
-      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/1.0.3/gigachat-1.0.3.zip",
+      "download_url": "https://github.com/peldrunai/peldrun-provider-gigachat/releases/download/v1.0.4/gigachat-1.0.4.zip",
       "checksum_sha256": "PLACEHOLDER_SHA256_FROM_VERIFY_SCRIPT",
       "developer": {
         "name": "PELDRUN Community",
